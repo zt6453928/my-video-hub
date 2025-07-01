@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "app/api/scrape/route.js": {
+      "maxDuration": 300,
+      "includeFiles": "node_modules/puppeteer/.local-chromium/**"
+    }
+  }
+}git add .
