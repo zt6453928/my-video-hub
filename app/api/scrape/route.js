@@ -2,7 +2,6 @@
 
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
-import puppeteer from 'puppeteer';
 
 // --- POST 函数现在是这个文件的唯一内容，且逻辑已简化 ---
 export async function POST(request) {
