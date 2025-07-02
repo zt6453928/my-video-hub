@@ -1,5 +1,3 @@
-<!-- 这是您的中文版 README 文件 -->
-
 <div align="center">
   <img src="https://i.ibb.co/tP8NRpCc/icon.png" alt="My Video Hub Logo" width="120">
   
@@ -101,3 +99,10 @@
 
 欢迎各种形式的贡献、问题报告和功能请求！请随时在 [Issues 页面](https://github.com/zt6453928/my-video-hub/issues)查看正在进行的讨论或提交新的问题。
 
+## 中国用户
+
+> My Video Hub 目前未做应用自动更新，需要自己留意此项目的新版本发布（如果有 GitHub 账号的，可以 watch 或 star）。
+
+
+如果 My Video Hub 应用对你有帮助可以分享给更多人，或者微信扫码打赏。
+<p align="center">  <img src="https://i.postimg.cc/zfRjch53/Wechat-IMG415.png" alt="App Screenshot" width="300"/></p>
