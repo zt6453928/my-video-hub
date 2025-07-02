@@ -154,9 +154,13 @@ Contributions, issues, and feature requests are welcome! Feel free to check the 
     这是一个标准的开源项目部分，欢迎其他人参与贡献。
 -->
 
-## 📝 License (许可证)
+## 中国用户
 
-This project is [MIT](./LICENSE) licensed.
+> My Video Hub 目前未做应用自动更新，需要自己留意此项目的新版本发布（如果有 GitHub 账号的，可以 watch 或 star）。
+这里有两篇使用文档，对 Noi 的理念和插件系统做了详细介绍，推荐新手仔细阅读。
+
+如果 My Video Hub 应用对你有帮助可以分享给更多人，或者微信扫码打赏。
+<img height="240" src="https://i.postimg.cc/zfRjch53/Wechat-IMG415.png">
 
 <!-- 
     中文注释：
