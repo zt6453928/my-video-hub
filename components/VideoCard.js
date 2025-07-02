@@ -1,9 +1,8 @@
-// 文件路径: components/VideoCard.js (v4.3 - 编辑功能版)
+// 文件路径: components/VideoCard.js (v6.1 - 前后端分离修复版)
 'use client';
 
 import React from 'react';
 
-// 我们新增了一个 onEdit prop
 export default function VideoCard({ video, onClick, onDelete, onEdit }) {
 
     const handleDeleteClick = (e) => {
@@ -13,14 +12,15 @@ export default function VideoCard({ video, onClick, onDelete, onEdit }) {
         }
     };
 
-    // --- 新增的编辑按钮点击处理函数 ---
     const handleEditClick = (e) => {
-        e.stopPropagation(); // 同样，阻止事件冒泡
+        e.stopPropagation();
         onEdit(video);
     };
 
+    // --- 核心修复：从环境变量中读取 API 地址 ---
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
     const thumbnailUrl = video.thumbnailUrl
-        ? `/api/proxy?url=${encodeURIComponent(video.thumbnailUrl)}&referer=${encodeURIComponent(video.originalPageUrl || video.url)}`
+        ? `${apiUrl}/proxy?url=${encodeURIComponent(video.thumbnailUrl)}&referer=${encodeURIComponent(video.originalPageUrl || video.url)}`
         : 'https://placehold.co/600x400/343a40/ffffff?text=无封面';
 
     return (
@@ -62,7 +62,6 @@ export default function VideoCard({ video, onClick, onDelete, onEdit }) {
                         {video.title}
                     </h5>
                     <div className="d-flex justify-content-between align-items-center mt-auto pt-2 text-muted small">
-                        {/* 如果有分类，就显示分类徽章 */}
                         <span className="badge bg-info text-dark">{video.category || '未分类'}</span>
                         <span className={`text-capitalize`}><i className="bi bi-play-circle-fill me-1"></i>{video.platform}</span>
                     </div>

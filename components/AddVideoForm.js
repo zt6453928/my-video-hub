@@ -1,4 +1,4 @@
-// 文件路径: components/AddVideoForm.js (v4.0)
+// 文件路径: components/AddVideoForm.js (v6.2 - 前后端分离最终版)
 'use client';
 
 import React, { useState } from 'react';
@@ -10,12 +10,20 @@ export default function AddVideoForm({ onVideoAdded, onCancel }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!url.trim()) {
+            setError('视频链接不能为空！');
+            return;
+        }
         setIsSubmitting(true);
         setError('');
 
         try {
-            // --- 核心改造: 调用新的 scrape API ---
-            const response = await fetch('/api/scrape', {
+            // 从环境变量中读取 API 服务器的地址
+            const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/scrape`;
+
+            console.log(`[Add Form] 正在向 API 发送请求: ${apiUrl}`);
+
+            const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: url }),
@@ -27,23 +35,24 @@ export default function AddVideoForm({ onVideoAdded, onCancel }) {
             }
 
             const addedVideo = await response.json();
-            // 将抓取到的完整数据传递给父组件
+
+            // 将抓取到的完整数据传递给父组件 (page.js)
             onVideoAdded(addedVideo);
             setUrl('');
 
         } catch (err) {
+            console.error("[Add Form] 提交时出错:", err);
             setError(err.message);
         } finally {
             setIsSubmitting(false);
         }
     };
 
-
     return (
         <div className="card bg-light mb-4">
             <div className="card-body">
                 <h5 className="card-title">添加新视频</h5>
-                <p className="card-text text-muted small">粘贴视频页面链接，系统将自动抓取标题和封面。</p>
+                <p className="card-text text-muted small">粘贴视频页面或 M3U8 链接，系统将自动抓取信息。</p>
                 <form onSubmit={handleSubmit}>
                     <div className="mb-3">
                         <div className="input-group">
@@ -63,7 +72,14 @@ export default function AddVideoForm({ onVideoAdded, onCancel }) {
                     <div className="d-flex justify-content-end gap-2">
                         <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={isSubmitting}>取消</button>
                         <button type="submit" className="btn btn-success" disabled={isSubmitting}>
-                            {isSubmitting ? '正在抓取...' : '确认添加'}
+                            {isSubmitting ? (
+                                <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    正在抓取...
+                                </>
+                            ) : (
+                                '确认添加'
+                            )}
                         </button>
                     </div>
                 </form>

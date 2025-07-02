@@ -1,4 +1,4 @@
-// 文件路径: components/VideoPlayerModal.js (v4.1 - 专业音视频同步终极版)
+// 文件路径: components/VideoPlayerModal.js (v6.13 - 状态重置终极版)
 'use client';
 
 import React, { useEffect, useRef } from 'react';
@@ -6,131 +6,103 @@ import React, { useEffect, useRef } from 'react';
 export default function VideoPlayerModal({ video, onClose }) {
     const modalRef = useRef(null);
     const videoRef = useRef(null);
+    const modalInstanceRef = useRef(null);
+    const hlsInstanceRef = useRef(null);
+    const audioInstanceRef = useRef(null);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-    // 播放器渲染逻辑
-    const renderPlayer = () => {
-        const platform = video.platform ? video.platform.toLowerCase() : '';
-
-        // 策略1: 如果是 YouTube, 使用 iframe
-        if (platform.includes('youtube')) {
-            const pageUrl = video.originalPageUrl || video.url;
-            try {
-                const url = new URL(pageUrl);
-                const videoId = url.searchParams.get('v');
-                if (videoId) {
-                    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
-                    return <iframe src={embedUrl} title={video.title} className="w-100 h-100" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>;
-                }
-            } catch (e) { /* 忽略解析错误 */ }
-        }
-
-        // 策略2: 对于所有其他平台 (Bilibili, XV, Happy 等), 都默认使用 <video> 标签
-        // 封面图现在也通过代理加载，以解决防盗链问题
-        return (
-            <video
-                ref={videoRef}
-                id="video-player"
-                className="w-100 h-100 bg-black"
-                controls
-                autoPlay
-                crossOrigin="anonymous"
-                poster={video.thumbnailUrl ? `/api/proxy?url=${encodeURIComponent(video.thumbnailUrl)}&referer=${encodeURIComponent(video.originalPageUrl || video.url)}` : ''}
-            ></video>
-        );
-    };
-
-    // 播放逻辑
+    // 效果 1: 负责 Modal 的创建和基础事件绑定
     useEffect(() => {
-        if (!video || !modalRef.current) return;
+        if (!modalRef.current) return;
+        // 初始化 Modal 实例并存储
+        modalInstanceRef.current = new window.bootstrap.Modal(modalRef.current);
 
-        const modalInstance = window.bootstrap.Modal.getOrCreateInstance(modalRef.current);
-        modalInstance.show();
-        const handleHide = () => onClose();
-        modalRef.current.addEventListener('hidden.bs.modal', handleHide);
+        // 定义当 Modal 完全隐藏后要执行的清理工作
+        const handleHidden = () => {
+            onClose(); // 通知父组件关闭已完成
+        };
+        modalRef.current.addEventListener('hidden.bs.modal', handleHidden);
 
-        let hls = null;
-        let audio = null;
+        // 组件卸载时，销毁 Modal 实例并移除监听器
+        return () => {
+            if (modalRef.current) {
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+                modalRef.current.removeEventListener('hidden.bs.modal', handleHidden);
+            }
+            if (modalInstanceRef.current) {
+                modalInstanceRef.current.dispose();
+            }
+        };
+    }, [onClose]); // 这个 effect 只在组件挂载和卸载时运行
 
-        if (videoRef.current) {
-            const player = videoRef.current;
-            const platform = video.platform ? video.platform.toLowerCase() : '';
+    // 效果 2: 负责根据 video prop 的变化来显示/隐藏 Modal 和管理播放器
+    useEffect(() => {
+        const player = videoRef.current;
+
+        // --- 核心修复：定义一个统一的、彻底的清理函数 ---
+        const cleanupPlayer = () => {
+            console.log("Cleanup: 正在清理所有播放器实例...");
+            // 销毁 HLS 实例
+            if (hlsInstanceRef.current) {
+                hlsInstanceRef.current.destroy();
+                hlsInstanceRef.current = null;
+            }
+            // 销毁 Bilibili 的音频实例
+            if (audioInstanceRef.current) {
+                audioInstanceRef.current.pause();
+                audioInstanceRef.current.src = '';
+                audioInstanceRef.current = null;
+            }
+            // 重置 video 元素本身
+            if (player) {
+                player.pause();
+                player.removeAttribute('src');
+                player.load();
+            }
+        };
+
+        if (video && player && apiUrl) {
+            // 在设置新视频之前，先执行清理
+            cleanupPlayer();
+
+            // 显示 Modal
+            modalInstanceRef.current?.show();
+
+            const platform = video.platform.toLowerCase();
             const refererUrl = video.originalPageUrl || video.url;
-            const videoProxyUrl = `/api/proxy?url=${encodeURIComponent(video.url)}&referer=${encodeURIComponent(refererUrl)}`;
+            const videoProxyUrl = `${apiUrl}/proxy?url=${encodeURIComponent(video.url)}&referer=${encodeURIComponent(refererUrl)}`;
 
-            // --- 核心修复：Bilibili 专业音视频同步逻辑 ---
             if (platform === 'bilibili' && video.audioUrl) {
-                console.log("[播放器] Bilibili 模式: 启动专业同步逻辑...");
-                const audioProxyUrl = `/api/proxy?url=${encodeURIComponent(video.audioUrl)}&referer=${encodeURIComponent(refererUrl)}`;
-
+                const audioProxyUrl = `${apiUrl}/proxy?url=${encodeURIComponent(video.audioUrl)}&referer=${encodeURIComponent(refererUrl)}`;
                 player.src = videoProxyUrl;
-                audio = new Audio(audioProxyUrl);
+                const audio = new Audio(audioProxyUrl);
+                audioInstanceRef.current = audio;
                 audio.crossOrigin = "anonymous";
 
-                let isSyncing = false;
-                const syncTolerance = 0.5; // 允许 0.5 秒的音画误差
-
-                const playBoth = () => {
-                    const videoPromise = player.play();
-                    const audioPromise = audio.play();
-                    if (videoPromise !== undefined) videoPromise.catch(e => console.error("视频播放失败:", e));
-                    if (audioPromise !== undefined) audioPromise.catch(e => console.error("音频播放失败:", e));
-                };
-                const pauseBoth = () => { player.pause(); audio.pause(); };
-
-                const onPlay = () => playBoth();
-                const onPause = () => pauseBoth();
-
-                // 当拖动视频进度条时，同步音频
-                const onVideoSeeking = () => {
-                    if (!isSyncing && Math.abs(player.currentTime - audio.currentTime) > syncTolerance) {
-                        console.log(`同步音频到: ${player.currentTime}`);
-                        audio.currentTime = player.currentTime;
-                    }
-                };
-
-                // 当音频加载足够可以播放时，尝试与视频同步
-                const onAudioCanPlay = () => {
-                    if (Math.abs(player.currentTime - audio.currentTime) > syncTolerance) {
-                        audio.currentTime = player.currentTime;
-                    }
-                };
+                const onPlay = () => { if (audio.paused) audio.play(); };
+                const onPause = () => audio.pause();
+                const onSeeking = () => { if (Math.abs(player.currentTime - audio.currentTime) > 0.5) audio.currentTime = player.currentTime; };
 
                 player.addEventListener('play', onPlay);
                 player.addEventListener('pause', onPause);
-                player.addEventListener('seeking', onVideoSeeking);
-                audio.addEventListener('canplay', onAudioCanPlay);
+                player.addEventListener('seeking', onSeeking);
 
-                // 清理函数
-                return () => {
-                    player.removeEventListener('play', onPlay);
-                    player.removeEventListener('pause', onPause);
-                    player.removeEventListener('seeking', onVideoSeeking);
-                    if (audio) {
-                        audio.removeEventListener('canplay', onAudioCanPlay);
-                        audio.pause();
-                        audio.src = ''; // 释放资源
-                    }
-                };
-            }
-            // --- 其他 HLS 视频播放逻辑 ---
-            else if (window.Hls && window.Hls.isSupported()) {
-                console.log("[播放器] HLS 模式: 启动 hls.js...");
-                hls = new window.Hls();
+            } else if (window.Hls && window.Hls.isSupported()) {
+                const hls = new window.Hls();
+                hlsInstanceRef.current = hls;
                 hls.loadSource(videoProxyUrl);
                 hls.attachMedia(player);
+            } else {
+                player.src = videoProxyUrl;
             }
+        } else {
+            // 如果 video prop 变为 null，则隐藏 Modal 并执行清理
+            modalInstanceRef.current?.hide();
+            cleanupPlayer();
         }
+    }, [video, apiUrl]);
 
-        return () => {
-            if (modalRef.current) modalRef.current.removeEventListener('hidden.bs.modal', handleHide);
-            if (hls) hls.destroy();
-            if (audio) {
-                audio.pause();
-                audio.src = '';
-            }
-        };
-    }, [video, onClose]);
-
+    // 如果没有要播放的视频，就不渲染任何东西
     if (!video) return null;
 
     return (
@@ -139,10 +111,12 @@ export default function VideoPlayerModal({ video, onClose }) {
                 <div className="modal-content bg-dark text-white">
                     <div className="modal-header border-secondary">
                         <h5 className="modal-title text-truncate">{video.title}</h5>
-                        <button type="button" className="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        <button type="button" className="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div className="modal-body p-0">
-                        <div className="ratio ratio-16x9">{renderPlayer()}</div>
+                        <div className="ratio ratio-16x9">
+                            <video ref={videoRef} id="video-player" className="w-100 h-100 bg-black" controls autoPlay crossOrigin="anonymous"></video>
+                        </div>
                     </div>
                 </div>
             </div>
