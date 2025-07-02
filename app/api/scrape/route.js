@@ -191,11 +191,21 @@ async function scrapeJapan(url) {
 }
 
 // --- 抓取函数 3: "Bilibili" 网站的专属逻辑 (v3.23 - API直连终极版) ---
-async function scrapeBilibili(url) {
-    console.log(`[抓取器-Bilibili-v3.23] 启动 API 直连策略...`);
+async function scrapeBilibili(initialUrl) {
+    console.log(`[抓取器-Bilibili-v5.5] 启动 API 直连策略...`);
+    let targetUrl = initialUrl;
+
     try {
-        // 步骤 1: 获取页面 HTML
-        const pageResponse = await fetch(url, {
+        // --- 核心升级：处理 b23.tv 短链接 ---
+        if (targetUrl.includes('b23.tv')) {
+            console.log(`[抓取器-Bilibili-v5.5] 检测到 b23.tv 短链接，正在解析...`);
+            const shortLinkResponse = await fetch(targetUrl, { redirect: 'follow' });
+            targetUrl = shortLinkResponse.url; // 获取跳转后的最终 URL
+            console.log(`[抓取器-Bilibili-v5.5] 短链接成功解析为: ${targetUrl}`);
+        }
+
+        // 后续逻辑使用解析后的 targetUrl
+        const pageResponse = await fetch(targetUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                 'Referer': 'https://www.bilibili.com/'
@@ -204,16 +214,12 @@ async function scrapeBilibili(url) {
         const html = await pageResponse.text();
         const $ = cheerio.load(html);
 
-        // 步骤 2: 从 HTML 中提取标题和封面图
         const title = $('h1.video-title').attr('data-title') || $('title').text().replace(/_哔哩哔哩_bilibili.*/, '').trim();
         let thumbnailUrl = $('meta[property="og:image"]').attr('content') || $('img#wxwork-share-pic').attr('src');
         if (thumbnailUrl && thumbnailUrl.startsWith('//')) {
             thumbnailUrl = 'https:' + thumbnailUrl;
         }
-        console.log(`[抓取器-Bilibili-v3.23] 提取到标题: ${title}`);
-        console.log(`[抓取器-Bilibili-v3.23] 提取到封面: ${thumbnailUrl}`);
 
-        // 步骤 3: 从 HTML 中解析出包含 cid 和 bvid 的核心数据
         let initialState = null;
         const scriptContent = $('script:contains("window.__INITIAL_STATE__")').html();
         if (scriptContent) {
@@ -221,46 +227,27 @@ async function scrapeBilibili(url) {
             if (match && match[1]) {
                 try {
                     initialState = JSON.parse(match[1]);
-                } catch (e) {
-                    throw new Error("解析 INITIAL_STATE 失败，网站结构可能已更新。");
-                }
+                } catch (e) { throw new Error("解析 INITIAL_STATE 失败。"); }
             }
         }
 
-        if (!initialState || !initialState.videoData) {
-            throw new Error("未能在页面中找到 videoData。");
-        }
-
+        if (!initialState || !initialState.videoData) throw new Error("未能在页面中找到 videoData。");
         const { bvid, cid } = initialState.videoData;
-        console.log(`[抓取器-Bilibili-v3.23] 提取到 bvid: ${bvid}, cid: ${cid}`);
 
-        // 步骤 4: 使用 bvid 和 cid 调用官方 API 获取播放链接
         const apiUrl = `https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&fnval=16`;
-        const apiResponse = await fetch(apiUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Referer': url
-            }
-        });
+        const apiResponse = await fetch(apiUrl, { headers: { 'Referer': targetUrl } });
         const playinfoData = await apiResponse.json();
 
-        if (playinfoData.code !== 0 || !playinfoData.data.dash) {
-            throw new Error(`调用 Bilibili API 失败: ${playinfoData.message}`);
-        }
+        if (playinfoData.code !== 0 || !playinfoData.data.dash) throw new Error(`调用 Bilibili API 失败: ${playinfoData.message}`);
 
         const videoStreamUrl = playinfoData.data.dash.video[0].baseUrl;
         const audioStreamUrl = playinfoData.data.dash.audio[0].baseUrl;
-        console.log(`[抓取器-Bilibili-v3.23] 成功从 API 获取链接！`);
-
-        if (!title || !thumbnailUrl || !videoStreamUrl || !audioStreamUrl) {
-            throw new Error(`未能提取到全部所需数据。`);
-        }
 
         return {
             id: `vid_bilibili_${new Date().getTime()}`,
             url: videoStreamUrl,
             audioUrl: audioStreamUrl,
-            originalPageUrl: url,
+            originalPageUrl: targetUrl, // 使用解析后的长链接作为原始链接
             title,
             thumbnailUrl,
             platform: "Bilibili",
@@ -270,47 +257,8 @@ async function scrapeBilibili(url) {
         };
 
     } catch (error) {
-        console.error('[抓取器-Bilibili-v3.23] 发生严重错误:', error);
+        console.error('[抓取器-Bilibili-v5.5] 发生严重错误:', error);
         throw error;
     }
-}
-
-// --- 抓取函数 2: "XV" 网站的专属逻辑 (来自您的代码，稍作修正) ---
-async function scrapeXv(url) {
-    console.log(`[抓取器-XV] 开始抓取: ${url}`);
-    const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    const html = await response.text();
-    const $ = cheerio.load(html);
-
-    const titleElement = $('h2.page-title').clone();
-    titleElement.find('span').remove();
-    const title = titleElement.text().trim();
-
-    const thumbnailUrl = $('#video-player-bg img').attr('src');
-
-    let videoUrl = '';
-    const scriptContent = $('script:contains("html5player.setVideoHLS")').html();
-    if (scriptContent) {
-        const match = scriptContent.match(/html5player\.setVideoHLS\(['"](.*?)['"]\)/);
-        if (match && match[1]) {
-            videoUrl = match[1];
-        }
-    }
-
-    if (!title || !thumbnailUrl || !videoUrl) {
-        throw new Error(`无法从 XV 页面提取完整数据。`);
-    }
-
-    return {
-        id: `vid_xv_${new Date().getTime()}`,
-        url: videoUrl,
-        originalPageUrl: url, // 修正字段名以保持一致
-        title,
-        thumbnailUrl,
-        platform: "XV",
-        category: "未分类",
-        tags: [],
-        addedAt: new Date().toISOString(),
-    };
 }
 
