@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'My Video Hub',
   "webDir": "www",
   "server": {
-    "url": "https://my-video-hub-pearl.vercel.app", // <--- 确保这里是您的 Vercel 网址
+    "url": "https://mvideo.zeabur.app",
     "cleartext": true
   }
 };

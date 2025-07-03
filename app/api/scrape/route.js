@@ -28,7 +28,7 @@ export async function POST(request) {
 
             // --- 智能判断，调用不同的抓取函数 ---
             // 提示: 请将 'happy.com' 和 'japan.com' 替换为网站的真实域名
-            if (hostname.includes('cn.pornhub.com')) {
+            if (hostname.includes('cn.pornhub.com') || hostname.includes('www.pornhub.com')) {
                 console.log('[调度中心] 决策: 使用 Happy 网站提取策略...');
                 videoData = await scrapeHappy(url);
             } else if (hostname.includes('jable.tv')) {
@@ -81,16 +81,26 @@ function handleDirectM3U8(url) {
 }
 
 
-// --- 抓取函数 1: "Happy" 网站的完整逻辑 ---
-async function scrapeHappy(url) {
-    console.log(`[抓取器-Happy] 开始抓取: ${url}`);
-    const response = await fetch(url, {
+// --- 抓取函数: "Happy" 网站的专属逻辑 (v9.4 - 域名转换终极版) ---
+async function scrapeHappy(initialUrl) {
+    let targetUrl = initialUrl; // 使用一个新变量来存储可能被修改的 URL
+
+    // --- 核心修复：自动将手机版链接转换为桌面版 ---
+    if (targetUrl.includes('www.pornhub.com')) {
+        console.log('[抓取器-Happy] 检测到移动版链接，正在转换为桌面版...');
+        targetUrl = targetUrl.replace('www.pornhub.com', 'cn.pornhub.com');
+        console.log(`[抓取器-Happy] 转换后的链接: ${targetUrl}`);
+    }
+
+    console.log(`[抓取器-Happy] 开始抓取: ${targetUrl}`);
+    const response = await fetch(targetUrl, {
         headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
         }
     });
     if (!response.ok) throw new Error(`请求页面失败，状态码: ${response.status}`);
+
     const html = await response.text();
     const $ = cheerio.load(html);
 
@@ -107,8 +117,9 @@ async function scrapeHappy(url) {
                 const mediaDefinitions = flashvarsJson.mediaDefinitions;
                 if (mediaDefinitions && mediaDefinitions.length > 0) {
                     const hlsMedia = mediaDefinitions.find(m => m.format === 'hls' && m.videoUrl);
-                    if (hlsMedia) videoUrl = hlsMedia.videoUrl;
-                    else {
+                    if (hlsMedia) {
+                        videoUrl = hlsMedia.videoUrl;
+                    } else {
                         const highestQualityMedia = mediaDefinitions.filter(m => m.videoUrl).pop();
                         if (highestQualityMedia) videoUrl = highestQualityMedia.videoUrl;
                     }
@@ -121,8 +132,8 @@ async function scrapeHappy(url) {
 
     return {
         id: `vid_happy_${new Date().getTime()}`,
-        url: videoUrl || url,
-        originalPageUrl: url,
+        url: videoUrl || targetUrl, // 如果没抓到视频流，就用转换后的 URL
+        originalPageUrl: targetUrl,
         title,
         thumbnailUrl,
         platform: "Happy",
