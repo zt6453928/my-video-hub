@@ -1,4 +1,4 @@
-// 文件路径: components/VideoCard.js (v6.1 - 前后端分离修复版)
+// 文件路径: components/VideoCard.js (v9.2 - 一体化架构最终版)
 'use client';
 
 import React from 'react';
@@ -17,10 +17,9 @@ export default function VideoCard({ video, onClick, onDelete, onEdit }) {
         onEdit(video);
     };
 
-    // --- 核心修复：从环境变量中读取 API 地址 ---
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    // --- 核心修复：直接调用内部 API 路由 ---
     const thumbnailUrl = video.thumbnailUrl
-        ? `${apiUrl}/proxy?url=${encodeURIComponent(video.thumbnailUrl)}&referer=${encodeURIComponent(video.originalPageUrl || video.url)}`
+        ? `/api/proxy?url=${encodeURIComponent(video.thumbnailUrl)}&referer=${encodeURIComponent(video.originalPageUrl || video.url)}`
         : 'https://placehold.co/600x400/343a40/ffffff?text=无封面';
 
     return (

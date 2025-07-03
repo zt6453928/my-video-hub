@@ -1,4 +1,4 @@
-// 文件路径: components/AddVideoForm.js (v8.7 - 健壮性终极修复版)
+// 文件路径: components/AddVideoForm.js (v9.1 - 一体化架构最终版)
 'use client';
 
 import React, { useState } from 'react';
@@ -18,34 +18,20 @@ export default function AddVideoForm({ onVideoAdded, onCancel }) {
         setError('');
 
         try {
-            const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/scrape`;
+            // --- 核心修复：直接调用内部 API 路由 ---
+            const apiUrl = '/api/scrape';
+
             const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: url }),
             });
 
-            // --- 核心修复：健壮的响应处理 ---
             if (!response.ok) {
-                let errorMessage = `服务器错误，状态码: ${response.status}`;
-                try {
-                    // 尝试将错误响应解析为 JSON
-                    const errorData = await response.json();
-                    errorMessage = errorData.message || errorMessage;
-                } catch (jsonError) {
-                    // 如果解析失败，尝试将错误响应作为纯文本读取
-                    try {
-                        const errorText = await response.text();
-                        console.error("收到的非 JSON 错误响应:", errorText);
-                        errorMessage = `服务器返回了意外的格式。`;
-                    } catch (textError) {
-                        // 如果连读取文本都失败了，就使用通用错误信息
-                    }
-                }
-                throw new Error(errorMessage);
+                const errorData = await response.json();
+                throw new Error(errorData.message || '抓取视频信息失败');
             }
 
-            // 只有在响应成功时，才尝试解析 JSON
             const addedVideo = await response.json();
             onVideoAdded(addedVideo);
             setUrl('');

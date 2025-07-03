@@ -23,5 +23,5 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Vercel 部署配置文件
-.vercel
+# Zeabur 部署配置文件
+.zeabur

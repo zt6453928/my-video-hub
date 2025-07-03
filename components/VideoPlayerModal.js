@@ -1,4 +1,4 @@
-// 文件路径: components/VideoPlayerModal.js (v6.13 - 状态重置终极版)
+// 文件路径: components/VideoPlayerModal.js (v6.14 - 状态重置终极版)
 'use client';
 
 import React, { useEffect, useRef } from 'react';
@@ -17,10 +17,25 @@ export default function VideoPlayerModal({ video, onClose }) {
         // 初始化 Modal 实例并存储
         modalInstanceRef.current = new window.bootstrap.Modal(modalRef.current);
 
-        // 定义当 Modal 完全隐藏后要执行的清理工作
         const handleHidden = () => {
-            onClose(); // 通知父组件关闭已完成
+            // 当 Modal 完全隐藏后，执行清理并通知父组件
+            if (hlsInstanceRef.current) {
+                hlsInstanceRef.current.destroy();
+                hlsInstanceRef.current = null;
+            }
+            if (audioInstanceRef.current) {
+                audioInstanceRef.current.pause();
+                audioInstanceRef.current.src = '';
+                audioInstanceRef.current = null;
+            }
+            if (videoRef.current) {
+                videoRef.current.pause();
+                videoRef.current.removeAttribute('src');
+                videoRef.current.load();
+            }
+            onClose();
         };
+
         modalRef.current.addEventListener('hidden.bs.modal', handleHidden);
 
         // 组件卸载时，销毁 Modal 实例并移除监听器
@@ -33,7 +48,7 @@ export default function VideoPlayerModal({ video, onClose }) {
                 modalInstanceRef.current.dispose();
             }
         };
-    }, [onClose]); // 这个 effect 只在组件挂载和卸载时运行
+    }, [onClose]);
 
     // 效果 2: 负责根据 video prop 的变化来显示/隐藏 Modal 和管理播放器
     useEffect(() => {
@@ -61,7 +76,7 @@ export default function VideoPlayerModal({ video, onClose }) {
             }
         };
 
-        if (video && player && apiUrl) {
+        if (video && player) {
             // 在设置新视频之前，先执行清理
             cleanupPlayer();
 
@@ -70,10 +85,10 @@ export default function VideoPlayerModal({ video, onClose }) {
 
             const platform = video.platform.toLowerCase();
             const refererUrl = video.originalPageUrl || video.url;
-            const videoProxyUrl = `${apiUrl}/proxy?url=${encodeURIComponent(video.url)}&referer=${encodeURIComponent(refererUrl)}`;
+            const videoProxyUrl = `/api/proxy?url=${encodeURIComponent(video.url)}&referer=${encodeURIComponent(refererUrl)}`;
 
             if (platform === 'bilibili' && video.audioUrl) {
-                const audioProxyUrl = `${apiUrl}/proxy?url=${encodeURIComponent(video.audioUrl)}&referer=${encodeURIComponent(refererUrl)}`;
+                const audioProxyUrl = `/api/proxy?url=${encodeURIComponent(video.audioUrl)}&referer=${encodeURIComponent(refererUrl)}`;
                 player.src = videoProxyUrl;
                 const audio = new Audio(audioProxyUrl);
                 audioInstanceRef.current = audio;
@@ -92,30 +107,39 @@ export default function VideoPlayerModal({ video, onClose }) {
                 hlsInstanceRef.current = hls;
                 hls.loadSource(videoProxyUrl);
                 hls.attachMedia(player);
+                player.play().catch(e => console.error("播放失败:", e));
             } else {
                 player.src = videoProxyUrl;
             }
         } else {
-            // 如果 video prop 变为 null，则隐藏 Modal 并执行清理
+            // 如果 video prop 变为 null，则隐藏 Modal
             modalInstanceRef.current?.hide();
-            cleanupPlayer();
         }
-    }, [video, apiUrl]);
+    }, [video]);
 
-    // 如果没有要播放的视频，就不渲染任何东西
-    if (!video) return null;
+    const posterUrl = video?.thumbnailUrl
+        ? `/api/proxy?url=${encodeURIComponent(video.thumbnailUrl)}&referer=${encodeURIComponent(video.originalPageUrl || video.url)}`
+        : '';
 
     return (
-        <div className="modal fade" ref={modalRef} tabIndex="-1">
+        <div className="modal fade" ref={modalRef} tabIndex="-1" aria-hidden={!video}>
             <div className="modal-dialog modal-xl modal-dialog-centered">
                 <div className="modal-content bg-dark text-white">
                     <div className="modal-header border-secondary">
-                        <h5 className="modal-title text-truncate">{video.title}</h5>
+                        <h5 className="modal-title text-truncate">{video?.title}</h5>
                         <button type="button" className="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div className="modal-body p-0">
                         <div className="ratio ratio-16x9">
-                            <video ref={videoRef} id="video-player" className="w-100 h-100 bg-black" controls autoPlay crossOrigin="anonymous"></video>
+                            <video
+                                ref={videoRef}
+                                id="video-player"
+                                className="w-100 h-100 bg-black"
+                                controls
+                                autoPlay
+                                crossOrigin="anonymous"
+                                poster={posterUrl}
+                            ></video>
                         </div>
                     </div>
                 </div>
