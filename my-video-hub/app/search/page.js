@@ -1,22 +1,22 @@
-// 文件路径: app/search/page.js (功能完整版)
+// 文件路径: app/search/page.js (修复后)
 'use client';
+import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import searchService from '@/services/searchService';
-import videoService from '@/services/videoService'; // <-- 引入 videoService
+import videoService from '@/services/videoService';
 import VideoCard from '@/components/VideoCard';
 
-export default function SearchPage() {
+// 新建一个组件，包含所有需要 useSearchParams 的逻辑
+function SearchResults() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const keyword = searchParams.get('q');
 
     const [results, setResults] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-
-    // --- 核心修改：新增状态来管理添加过程 ---
-    const [addingVideoUrl, setAddingVideoUrl] = useState(null); // 正在添加的视频URL
-    const [addedVideoUrls, setAddedVideoUrls] = useState(new Set()); // 已成功添加的视频URL集合
+    const [addingVideoUrl, setAddingVideoUrl] = useState(null);
+    const [addedVideoUrls, setAddedVideoUrls] = useState(new Set());
 
     useEffect(() => {
         if (!keyword) {
@@ -31,11 +31,9 @@ export default function SearchPage() {
             .finally(() => setIsLoading(false));
     }, [keyword, router]);
 
-    // --- 核心修改：实现添加视频的函数 ---
     const handleAddVideo = async (videoFromSearch) => {
         setAddingVideoUrl(videoFromSearch.url);
         try {
-            // 1. 调用刮取 API 获取详细信息
             const scrapeResponse = await fetch('/api/scrape', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -44,12 +42,8 @@ export default function SearchPage() {
             if (!scrapeResponse.ok) throw new Error('刮取视频信息失败');
             const scrapedVideo = await scrapeResponse.json();
 
-            // 2. 调用 videoService 将完整信息保存到数据库
             await videoService.addVideo(scrapedVideo);
-
-            // 3. 更新 UI 状态
             setAddedVideoUrls(prev => new Set(prev).add(videoFromSearch.url));
-
         } catch (error) {
             console.error('添加视频失败:', error);
             alert(`添加 "${videoFromSearch.title}" 失败!`);
@@ -59,13 +53,20 @@ export default function SearchPage() {
     };
 
     return (
-        <main className="container pt-3 pb-5">
+        <>
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h2 className="mb-0">关于 “{keyword}” 的搜索结果</h2>
                 <button className="btn btn-secondary" onClick={() => router.push('/')}>返回首页</button>
             </div>
 
-            {isLoading && <div className="text-center"><div className="spinner-border" role="status"><span className="visually-hidden">Loading...</span></div><p className="mt-2">正在全网搜索中...</p></div>}
+            {isLoading && (
+                <div className="text-center">
+                    <div className="spinner-border" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <p className="mt-2">正在全网搜索中...</p>
+                </div>
+            )}
 
             {!isLoading && results.length === 0 && (
                 <p className="text-center text-muted">未找到任何相关视频。</p>
@@ -76,13 +77,24 @@ export default function SearchPage() {
                     <VideoCard
                         key={video.url}
                         video={video}
-                        variant="search" // <-- 告诉卡片这是搜索结果
+                        variant="search"
                         onAdd={handleAddVideo}
                         isAdding={addingVideoUrl === video.url}
                         isAdded={addedVideoUrls.has(video.url)}
                     />
                 ))}
             </div>
+        </>
+    );
+}
+
+// 主页面组件现在用 Suspense 包裹了客户端组件
+export default function SearchPage() {
+    return (
+        <main className="container pt-3 pb-5">
+            <Suspense fallback={<div className="text-center">正在加载搜索结果...</div>}>
+                <SearchResults />
+            </Suspense>
         </main>
     );
 }
