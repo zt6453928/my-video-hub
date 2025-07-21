@@ -1,4 +1,4 @@
-// 文件路径: components/VideoPlayerModal.js (最终修复版 - 采用官方嵌入链接)
+// 文件路径: components/VideoPlayerModal.js (最终解决方案 - 采用隐私增强模式)
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -81,7 +81,6 @@ export default function VideoPlayerModal({ video, onClose, onVideoEnded }) {
         if (video) {
             modalInstanceRef.current?.show();
             if (!isYoutube) {
-                // ... 这部分非YouTube视频的播放逻辑保持不变 ...
                 const player = videoRef.current;
                 if (!player) return;
 
@@ -157,8 +156,8 @@ export default function VideoPlayerModal({ video, onClose, onVideoEnded }) {
                                 youtubeVideoId ? (
                                     <iframe
                                         className="w-100 h-100"
-                                        // --- 核心修改：使用标准的 YouTube embed 链接 ---
-                                        src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1`}
+                                        // --- 核心修改：使用 YouTube 的隐私增强模式链接 ---
+                                        src={`https://www.youtube.com/watch?v=VIDEO_ID0{youtubeVideoId}?autoplay=1`}
                                         title={video?.title}
                                         frameBorder="0"
                                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
