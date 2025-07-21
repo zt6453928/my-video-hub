@@ -1,13 +1,13 @@
-// 文件路径: app/search/page.js (修复后)
+// 文件路径: app/search/page.js (修改后)
 'use client';
 import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import searchService from '@/services/searchService';
 import videoService from '@/services/videoService';
 import VideoCard from '@/components/VideoCard';
 
-// 新建一个组件，包含所有需要 useSearchParams 的逻辑
+// 客户端组件
 function SearchResults() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -17,36 +17,49 @@ function SearchResults() {
     const [isLoading, setIsLoading] = useState(true);
     const [addingVideoUrl, setAddingVideoUrl] = useState(null);
     const [addedVideoUrls, setAddedVideoUrls] = useState(new Set());
+    const [searchSource, setSearchSource] = useState('all'); // <-- 新增状态：搜索源
 
-    useEffect(() => {
+    // 使用 useCallback 包装搜索函数
+    const performSearch = useCallback(() => {
         if (!keyword) {
             router.push('/');
             return;
         }
 
         setIsLoading(true);
-        searchService.search(keyword)
+        // 调用 searchService 时传入搜索源
+        searchService.search(keyword, searchSource)
             .then(data => setResults(data))
             .catch(err => console.error("搜索失败:", err))
             .finally(() => setIsLoading(false));
-    }, [keyword, router]);
+    }, [keyword, searchSource, router]);
+
+    // keyword 或 searchSource 变化时重新执行搜索
+    useEffect(() => {
+        performSearch();
+    }, [performSearch]);
 
     const handleAddVideo = async (videoFromSearch) => {
         setAddingVideoUrl(videoFromSearch.url);
         try {
+            // 注意：这里的 /api/scrape 是前端 Next.js 的 API 路由，不是后端 Express 的
             const scrapeResponse = await fetch('/api/scrape', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: videoFromSearch.url }),
             });
-            if (!scrapeResponse.ok) throw new Error('刮取视频信息失败');
+            if (!scrapeResponse.ok) {
+                const errorData = await scrapeResponse.json();
+                throw new Error(errorData.message || '刮取视频信息失败');
+            }
             const scrapedVideo = await scrapeResponse.json();
 
             await videoService.addVideo(scrapedVideo);
             setAddedVideoUrls(prev => new Set(prev).add(videoFromSearch.url));
+
         } catch (error) {
             console.error('添加视频失败:', error);
-            alert(`添加 "${videoFromSearch.title}" 失败!`);
+            alert(`添加 "${videoFromSearch.title}" 失败! 原因: ${error.message}`);
         } finally {
             setAddingVideoUrl(null);
         }
@@ -54,16 +67,28 @@ function SearchResults() {
 
     return (
         <>
-            <div className="d-flex justify-content-between align-items-center mb-4">
+            <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
                 <h2 className="mb-0">关于 “{keyword}” 的搜索结果</h2>
                 <button className="btn btn-secondary" onClick={() => router.push('/')}>返回首页</button>
             </div>
 
+            {/* --- 新增：搜索源选择器 --- */}
+            <div className="d-flex justify-content-center mb-4">
+                <div className="btn-group" role="group" aria-label="Search source">
+                    <input type="radio" className="btn-check" name="source" id="sourceAll" autoComplete="off" checked={searchSource === 'all'} onChange={() => setSearchSource('all')} />
+                    <label className="btn btn-outline-primary" htmlFor="sourceAll">全部</label>
+
+                    <input type="radio" className="btn-check" name="source" id="sourceBilibili" autoComplete="off" checked={searchSource === 'bilibili'} onChange={() => setSearchSource('bilibili')} />
+                    <label className="btn btn-outline-primary" htmlFor="sourceBilibili">Bilibili</label>
+
+                    <input type="radio" className="btn-check" name="source" id="sourceYoutube" autoComplete="off" checked={searchSource === 'youtube'} onChange={() => setSearchSource('youtube')} />
+                    <label className="btn btn-outline-primary" htmlFor="sourceYoutube">YouTube</label>
+                </div>
+            </div>
+
             {isLoading && (
                 <div className="text-center">
-                    <div className="spinner-border" role="status">
-                        <span className="visually-hidden">Loading...</span>
-                    </div>
+                    <div className="spinner-border" role="status"><span className="visually-hidden">Loading...</span></div>
                     <p className="mt-2">正在全网搜索中...</p>
                 </div>
             )}
@@ -88,7 +113,7 @@ function SearchResults() {
     );
 }
 
-// 主页面组件现在用 Suspense 包裹了客户端组件
+// 主页面组件保持不变
 export default function SearchPage() {
     return (
         <main className="container pt-3 pb-5">

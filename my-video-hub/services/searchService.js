@@ -1,9 +1,10 @@
-// 文件路径: services/searchService.js (新文件)
+// 文件路径: services/searchService.js (修改后)
 import api from './api';
 
-const search = async (keyword) => {
+// 接受 keyword 和 source 两个参数
+const search = async (keyword, source = 'all') => {
     const response = await api.get('/search', {
-        params: { keyword }
+        params: { keyword, source } // 将 source 传递给后端
     });
     return response.data;
 };
