@@ -1,18 +1,16 @@
-// 文件路径: components/VideoPlayerModal.js (最终完善版 - 兼容 YouTube Shorts)
+// 文件路径: components/VideoPlayerModal.js (最终修复版 - 采用官方嵌入链接)
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 
-// --- 新增：一个更强大的函数，用于从各种YouTube链接中提取视频ID ---
+// 函数：从各种YouTube链接中提取视频ID (保持不变)
 function getYouTubeVideoId(url) {
     if (!url) return null;
     let videoId = null;
     try {
         const urlObj = new URL(url);
-        // 1. 检查标准 "watch" 链接 (v=VIDEO_ID)
         videoId = urlObj.searchParams.get('v');
         if (videoId) return videoId;
 
-        // 2. 检查短链接 (youtu.be/VIDEO_ID) 和 shorts 链接 (/shorts/VIDEO_ID)
         const pathParts = urlObj.pathname.split('/');
         if (urlObj.hostname === 'youtu.be') {
             return pathParts[1];
@@ -25,7 +23,6 @@ function getYouTubeVideoId(url) {
     }
     return null;
 }
-
 
 export default function VideoPlayerModal({ video, onClose, onVideoEnded }) {
     const modalRef = useRef(null);
@@ -42,7 +39,6 @@ export default function VideoPlayerModal({ video, onClose, onVideoEnded }) {
             const isYouTubeVideo = video.platform === 'YouTube';
             setIsYoutube(isYouTubeVideo);
             if (isYouTubeVideo) {
-                // --- 核心修改：使用新的、更强大的ID提取函数 ---
                 const videoId = getYouTubeVideoId(video.url);
                 if (videoId) {
                     setYoutubeVideoId(videoId);
@@ -85,11 +81,26 @@ export default function VideoPlayerModal({ video, onClose, onVideoEnded }) {
         if (video) {
             modalInstanceRef.current?.show();
             if (!isYoutube) {
+                // ... 这部分非YouTube视频的播放逻辑保持不变 ...
                 const player = videoRef.current;
                 if (!player) return;
 
                 let onPlay, onPause, onSeeked, onRateChange, onEnded;
-                const cleanupPlayer = () => { /* ... 这部分保持不变 ... */ };
+                const cleanupPlayer = () => {
+                    player.removeEventListener('play', onPlay);
+                    player.removeEventListener('pause', onPause);
+                    player.removeEventListener('seeked', onSeeked);
+                    player.removeEventListener('ratechange', onRateChange);
+                    player.removeEventListener('ended', onEnded);
+                    if (hlsInstanceRef.current) hlsInstanceRef.current.destroy();
+                    if (audioRef.current) {
+                        audioRef.current.pause();
+                        audioRef.current.src = '';
+                    }
+                    player.pause();
+                    player.removeAttribute('src');
+                    player.load();
+                };
 
                 cleanupPlayer();
 
@@ -146,7 +157,8 @@ export default function VideoPlayerModal({ video, onClose, onVideoEnded }) {
                                 youtubeVideoId ? (
                                     <iframe
                                         className="w-100 h-100"
-                                        src={`https://www.youtube.com/watch?v=$...{youtubeVideoId}?autoplay=1`}
+                                        // --- 核心修改：使用标准的 YouTube embed 链接 ---
+                                        src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1`}
                                         title={video?.title}
                                         frameBorder="0"
                                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
