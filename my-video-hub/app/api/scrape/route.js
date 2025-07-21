@@ -1,4 +1,4 @@
-// 文件路径: app/api/scrape/route.js (修改后)
+// 文件路径: app/api/scrape/route.js (修复后)
 
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
@@ -6,7 +6,6 @@ import puppeteer from 'puppeteer';
 
 const DEFAULT_CATEGORY = '未分类';
 
-// ... getBrowser 函数保持不变 ...
 async function getBrowser() {
     if (process.env.PUPPETEER_WS_ENDPOINT) {
         console.log(`[Puppeteer] 连接到外部浏览器: ${process.env.PUPPETEER_WS_ENDPOINT}`);
@@ -15,7 +14,6 @@ async function getBrowser() {
     console.log('[Puppeteer] 启动新的本地浏览器实例...');
     return puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
 }
-
 
 export async function POST(request) {
     const { url } = await request.json();
@@ -32,8 +30,8 @@ export async function POST(request) {
         if (url.endsWith('.m3u8')) {
             videoData = handleDirectM3U8(url);
         } else {
-            // --- 核心修改：添加对 YouTube 的判断 ---
-            if (hostname.includes('youtube.com')) {
+            // --- 核心修改：修正对 YouTube 的判断 ---
+            if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
                 console.log('[调度中心] 决策: 使用 YouTube 提取策略...');
                 videoData = await scrapeYouTube(url);
             } else if (hostname.includes('cn.pornhub.com') || hostname.includes('www.pornhub.com')) {
@@ -65,29 +63,33 @@ export async function POST(request) {
     }
 }
 
-// ... handleDirectM3U8, scrapeHappy, scrapeJapan, scrapeBilibili, scrapeGeneric, scrapeXv 函数保持不变 ...
 
-// --- 新增：YouTube 抓取函数 ---
+// --- YouTube 抓取函数 ---
 async function scrapeYouTube(url) {
     console.log(`[抓取器-YouTube] 开始抓取: ${url}`);
-    const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const response = await fetch(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9' // 增加语言头，避免重定向到本地化页面
+        }
+    });
     if (!response.ok) throw new Error(`获取 YouTube 页面失败: ${response.statusText}`);
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // YouTube 页面通常包含标准的 Open Graph meta 标签
     const title = $('meta[property="og:title"]').attr('content') || $('title').text();
     const thumbnailUrl = $('meta[property="og:image"]').attr('content');
 
-    if (!title) throw new Error('无法从 YouTube 页面提取标题。');
-    if (!thumbnailUrl) throw new Error('无法从 YouTube 页面提取封面。');
+    if (!title || title.includes('Before you continue')) {
+        throw new Error('无法从 YouTube 页面提取标题，可能遇到了人机验证。');
+    }
+    if (!thumbnailUrl) {
+        throw new Error('无法从 YouTube 页面提取封面。');
+    }
 
-    // 注意：由于YouTube的限制，我们无法直接获取视频流文件。
-    // 因此，我们将页面URL本身存为视频URL。
-    // 这意味着这个视频无法在应用内播放器中播放，但可以点击标题跳转到原网站。
     return {
         id: `vid_youtube_${new Date().getTime()}`,
-        url: url, // 直接使用页面 URL
+        url: url,
         originalPageUrl: url,
         title,
         thumbnailUrl,

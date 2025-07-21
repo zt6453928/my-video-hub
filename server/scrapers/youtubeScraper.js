@@ -1,4 +1,4 @@
-// 文件路径: server/scrapers/youtubeScraper.js (修改后)
+// 文件路径: server/scrapers/youtubeScraper.js (修复后)
 const axios = require('axios');
 
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
@@ -20,7 +20,7 @@ async function searchYouTube(keyword) {
 
         return data.items.map(item => ({
             title: item.snippet.title,
-            // --- 核心修改：返回一个标准的 YouTube 观看链接 ---
+            // --- 核心修复：返回一个标准的 YouTube 观看链接 ---
             url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
             thumbnailUrl: item.snippet.thumbnails.high.url,
             author: item.snippet.channelTitle,
