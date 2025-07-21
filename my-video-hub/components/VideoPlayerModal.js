@@ -1,8 +1,8 @@
-// 文件路径: components/VideoPlayerModal.js (最终解决方案 - 采用隐私增强模式)
+// 文件路径: components/VideoPlayerModal.js (最终修复版 - 采用隐私增强模式)
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 
-// 函数：从各种YouTube链接中提取视频ID (保持不变)
+// 函数：从各种YouTube链接中提取视频ID
 function getYouTubeVideoId(url) {
     if (!url) return null;
     let videoId = null;
@@ -156,7 +156,7 @@ export default function VideoPlayerModal({ video, onClose, onVideoEnded }) {
                                 youtubeVideoId ? (
                                     <iframe
                                         className="w-100 h-100"
-                                        // --- 核心修改：使用 YouTube 的隐私增强模式链接 ---
+                                        // --- 核心修复：使用 YouTube 的隐私增强模式链接 ---
                                         src={`https://www.youtube.com/watch?v=VIDEO_ID0{youtubeVideoId}?autoplay=1`}
                                         title={video?.title}
                                         frameBorder="0"
