@@ -1,4 +1,4 @@
-// 文件路径: next.config.mjs (通配符域名最终版)
+// 文件路径: next.config.mjs (修改后)
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -10,16 +10,21 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'via.placeholder.com', // 保留本地占位图方案
+        hostname: 'via.placeholder.com',
       },
-      // --- 核心修复：使用通配符授权所有 Bilibili 图片域名 ---
+      // Bilibili 的域名
       {
         protocol: 'https',
-        hostname: '**.hdslb.com', // 匹配 i0.hdslb.com, i1.hdslb.com, i2.hdslb.com 等
+        hostname: '**.hdslb.com',
       },
       {
         protocol: 'https',
-        hostname: '**.biliimg.com', // 匹配 archive.biliimg.com 等
+        hostname: '**.biliimg.com',
+      },
+      // --- 新增：YouTube 的图片域名 ---
+      {
+        protocol: 'https',
+        hostname: 'i.ytimg.com',
       },
     ],
   },

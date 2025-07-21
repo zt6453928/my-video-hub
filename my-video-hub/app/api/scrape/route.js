@@ -1,20 +1,12 @@
-// 文件路径: app/api/scrape/route.js (v4.3 - 性能与健壮性优化版)
+// 文件路径: app/api/scrape/route.js (修改后)
 
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer';
 
-// --- 假设常量文件已创建 ---
-// 如果您还未创建，请先在项目根目录创建 lib/constants.js
-// export const DEFAULT_CATEGORY = '未分类';
 const DEFAULT_CATEGORY = '未分类';
 
-
-/**
- * 获取浏览器实例。
- * 优先连接到通过环境变量指定的外部浏览器服务，以获得最佳性能。
- * 如果未指定，则启动一个新的本地 Puppeteer 实例。
- */
+// ... getBrowser 函数保持不变 ...
 async function getBrowser() {
     if (process.env.PUPPETEER_WS_ENDPOINT) {
         console.log(`[Puppeteer] 连接到外部浏览器: ${process.env.PUPPETEER_WS_ENDPOINT}`);
@@ -25,7 +17,6 @@ async function getBrowser() {
 }
 
 
-// --- POST 函数现在是这个文件的唯一内容，且逻辑已简化 ---
 export async function POST(request) {
     const { url } = await request.json();
     if (!url) {
@@ -38,16 +29,14 @@ export async function POST(request) {
 
         console.log(`[Scrape API] 收到 URL，主机名: ${hostname}`);
 
-        // --- 核心升级：首先判断链接是否为 M3U8 直链 ---
         if (url.endsWith('.m3u8')) {
-            console.log('[调度中心] 检测到 M3U8 直链，直接处理...');
             videoData = handleDirectM3U8(url);
         } else {
-            // 如果不是直链，则执行常规的网页抓取逻辑
-            console.log(`[调度中心] 收到网页 URL，主机名: ${hostname}`);
-
-            // --- 智能判断，调用不同的抓取函数 ---
-            if (hostname.includes('cn.pornhub.com') || hostname.includes('www.pornhub.com')) {
+            // --- 核心修改：添加对 YouTube 的判断 ---
+            if (hostname.includes('youtube.com')) {
+                console.log('[调度中心] 决策: 使用 YouTube 提取策略...');
+                videoData = await scrapeYouTube(url);
+            } else if (hostname.includes('cn.pornhub.com') || hostname.includes('www.pornhub.com')) {
                 console.log('[调度中心] 决策: 使用 Happy 网站提取策略...');
                 videoData = await scrapeHappy(url);
             } else if (hostname.includes('jable.tv')) {
@@ -69,12 +58,44 @@ export async function POST(request) {
 
     } catch (error) {
         console.error('[Scrape API] 处理请求失败:', error);
-        // --- 优化：返回更具体的错误信息 ---
         const errorMessage = (error instanceof Error && error.message)
             ? error.message
             : '抓取失败，发生一个未知错误。';
         return NextResponse.json({ message: errorMessage }, { status: 500 });
     }
+}
+
+// ... handleDirectM3U8, scrapeHappy, scrapeJapan, scrapeBilibili, scrapeGeneric, scrapeXv 函数保持不变 ...
+
+// --- 新增：YouTube 抓取函数 ---
+async function scrapeYouTube(url) {
+    console.log(`[抓取器-YouTube] 开始抓取: ${url}`);
+    const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!response.ok) throw new Error(`获取 YouTube 页面失败: ${response.statusText}`);
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    // YouTube 页面通常包含标准的 Open Graph meta 标签
+    const title = $('meta[property="og:title"]').attr('content') || $('title').text();
+    const thumbnailUrl = $('meta[property="og:image"]').attr('content');
+
+    if (!title) throw new Error('无法从 YouTube 页面提取标题。');
+    if (!thumbnailUrl) throw new Error('无法从 YouTube 页面提取封面。');
+
+    // 注意：由于YouTube的限制，我们无法直接获取视频流文件。
+    // 因此，我们将页面URL本身存为视频URL。
+    // 这意味着这个视频无法在应用内播放器中播放，但可以点击标题跳转到原网站。
+    return {
+        id: `vid_youtube_${new Date().getTime()}`,
+        url: url, // 直接使用页面 URL
+        originalPageUrl: url,
+        title,
+        thumbnailUrl,
+        platform: "YouTube",
+        category: DEFAULT_CATEGORY,
+        tags: [],
+        addedAt: new Date().toISOString(),
+    };
 }
 
 // --- 新增函数：专门处理 M3U8 直链 ---
