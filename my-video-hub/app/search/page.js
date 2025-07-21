@@ -1,4 +1,4 @@
-// 文件路径: app/search/page.js (修改后)
+// 文件路径: app/search/page.js (最终修复版)
 'use client';
 import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import searchService from '@/services/searchService';
 import videoService from '@/services/videoService';
 import VideoCard from '@/components/VideoCard';
+import { DEFAULT_CATEGORY } from '@/lib/constants'; // 引入常量
 
 // 客户端组件
 function SearchResults() {
@@ -17,44 +18,59 @@ function SearchResults() {
     const [isLoading, setIsLoading] = useState(true);
     const [addingVideoUrl, setAddingVideoUrl] = useState(null);
     const [addedVideoUrls, setAddedVideoUrls] = useState(new Set());
-    const [searchSource, setSearchSource] = useState('all'); // <-- 新增状态：搜索源
+    const [searchSource, setSearchSource] = useState('all');
 
-    // 使用 useCallback 包装搜索函数
     const performSearch = useCallback(() => {
         if (!keyword) {
             router.push('/');
             return;
         }
-
         setIsLoading(true);
-        // 调用 searchService 时传入搜索源
         searchService.search(keyword, searchSource)
             .then(data => setResults(data))
             .catch(err => console.error("搜索失败:", err))
             .finally(() => setIsLoading(false));
     }, [keyword, searchSource, router]);
 
-    // keyword 或 searchSource 变化时重新执行搜索
     useEffect(() => {
         performSearch();
     }, [performSearch]);
 
+    // --- 核心修改：优化 handleAddVideo 函数 ---
     const handleAddVideo = async (videoFromSearch) => {
         setAddingVideoUrl(videoFromSearch.url);
         try {
-            // 注意：这里的 /api/scrape 是前端 Next.js 的 API 路由，不是后端 Express 的
-            const scrapeResponse = await fetch('/api/scrape', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: videoFromSearch.url }),
-            });
-            if (!scrapeResponse.ok) {
-                const errorData = await scrapeResponse.json();
-                throw new Error(errorData.message || '刮取视频信息失败');
-            }
-            const scrapedVideo = await scrapeResponse.json();
+            let videoToSave;
 
-            await videoService.addVideo(scrapedVideo);
+            // 如果是 YouTube 视频，则直接使用已有信息，跳过 scraping
+            if (videoFromSearch.platform === 'YouTube') {
+                console.log('检测到 YouTube 视频，跳过二次抓取步骤。');
+                videoToSave = {
+                    originalPageUrl: videoFromSearch.url,
+                    url: videoFromSearch.url,
+                    title: videoFromSearch.title,
+                    thumbnailUrl: videoFromSearch.thumbnailUrl,
+                    platform: videoFromSearch.platform,
+                    category: DEFAULT_CATEGORY,
+                    tags: [],
+                };
+            } else {
+                // 对于其他平台（如Bilibili），仍然使用原有的 scraping 流程
+                const scrapeResponse = await fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: videoFromSearch.url }),
+                });
+
+                if (!scrapeResponse.ok) {
+                    const errorData = await scrapeResponse.json();
+                    throw new Error(errorData.message || '刮取视频信息失败');
+                }
+                videoToSave = await scrapeResponse.json();
+            }
+
+            // 将整理好的数据发送到后端保存
+            await videoService.addVideo(videoToSave);
             setAddedVideoUrls(prev => new Set(prev).add(videoFromSearch.url));
 
         } catch (error) {
@@ -72,7 +88,6 @@ function SearchResults() {
                 <button className="btn btn-secondary" onClick={() => router.push('/')}>返回首页</button>
             </div>
 
-            {/* --- 新增：搜索源选择器 --- */}
             <div className="d-flex justify-content-center mb-4">
                 <div className="btn-group" role="group" aria-label="Search source">
                     <input type="radio" className="btn-check" name="source" id="sourceAll" autoComplete="off" checked={searchSource === 'all'} onChange={() => setSearchSource('all')} />
